@@ -1,17 +1,15 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
+    "fmt"
+    "os"
+    "path/filepath"
+    "strings"
+    "time"
     "io"
     "flag"
     "log"
 )
-
-
 
 func GetHomeDir() (string, error) {
     homeDir, homeDirErr := os.UserHomeDir()
@@ -55,6 +53,7 @@ type FileMetadata struct {
     IsDir bool
     Size int64
     Path string
+    IsReg bool
 }
 
 func ParseFileTypes(fileTypes string, sep string) map[string]bool {
@@ -96,10 +95,10 @@ func main() {
     log.Printf("Copy files? %v\n", CopyFilesFlag)
     log.Printf("Echo files? %v\n", EchoFilesFlag)
 
-    parsedFileTypes := ParseFileTypes(FileTypes, ",")
+    ParsedFileTypes := ParseFileTypes(FileTypes, ",")
 
     if EchoFilesFlag {
-        fmt.Printf("Name\tExtension\tModDate\tIsDir\tSize(B)\tFilePath\n")
+        fmt.Printf("Name\tExtension\tModDate\tIsDir\tSize(B)\tFilePath\tIsRegularfile\n")
     }
 
     err := filepath.Walk(RootDir, func(path string, info os.FileInfo, err error) error {
@@ -114,20 +113,22 @@ func main() {
             IsDir: info.IsDir(),
             Size: info.Size(),
             Path: path,
+            IsReg: info.Mode().IsRegular(),
         }
 
 
 
-        _, IsOfTargetFileType := parsedFileTypes[strings.ToLower(data.Ext)]
+        _, IsOfTargetFileType := ParsedFileTypes[strings.ToLower(data.Ext)]
         if !data.IsDir && IsOfTargetFileType {
             if EchoFilesFlag {
-                fmt.Printf("%v\t%v\t%v\t%v\t%v\t%v\n",
+                fmt.Printf("%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
                     data.Name, 
                     data.Ext, 
                     data.ModDate,
                     data.IsDir,
                     data.Size,
                     data.Path,
+                    data.IsReg,
                 )
             }
 
