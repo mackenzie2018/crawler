@@ -12,6 +12,7 @@ import (
 )
 
 
+
 func GetHomeDir() (string, error) {
     homeDir, homeDirErr := os.UserHomeDir()
     if homeDirErr != nil {
@@ -56,16 +57,30 @@ type FileMetadata struct {
     Path string
 }
 
+func ParseFileTypes(fileTypes string, sep string) map[string]bool {
+    SplitFileTypeString := strings.Split(fileTypes, sep)
+    TargetFileTypes := make(map[string]bool)
+    for _, ft := range SplitFileTypeString {
+        TargetFileTypes[strings.ToLower(ft)] = true
+    }
+    return TargetFileTypes
+}
+
 func main() {
     homeDir, homeDirErr := GetHomeDir()
     if homeDirErr != nil {
         fmt.Println("Error: ", homeDirErr)
     }
 
+    f, _ := os.Create("./crawler_log.txt")
+    defer f.Close()
+    log.SetOutput(f)
+    log.Println("This log is written to crawler_log.txt")
+
     var RootDir string
     flag.StringVar(&RootDir, "rootDir", homeDir, "The root directory to crawl")
-    var FileType string
-    flag.StringVar(&FileType, "fileType", ".py", "The file types to find")
+    var FileTypes string
+    flag.StringVar(&FileTypes, "fileType", ".py", "The file types to find")
     var ToDir string
     flag.StringVar(&ToDir, "toDir", "/tmp/", "The directory to copy files into")
     var CopyFilesFlag bool
@@ -76,10 +91,12 @@ func main() {
 
     log.Printf("crawler called\n")
     log.Printf("Parsing %v\n", RootDir)
-    log.Printf("Looking for files of type: %v\n", FileType)
+    log.Printf("Looking for files of type: %v\n", FileTypes)
     log.Printf("Output directory: %v\n", ToDir)
     log.Printf("Copy files? %v\n", CopyFilesFlag)
     log.Printf("Echo files? %v\n", EchoFilesFlag)
+
+    parsedFileTypes := ParseFileTypes(FileTypes, ",")
 
     if EchoFilesFlag {
         fmt.Printf("Name\tExtension\tModDate\tIsDir\tSize(B)\tFilePath\n")
@@ -101,8 +118,8 @@ func main() {
 
 
 
-        if !data.IsDir && strings.ToLower(data.Ext) == FileType {
-            
+        _, IsOfTargetFileType := parsedFileTypes[strings.ToLower(data.Ext)]
+        if !data.IsDir && IsOfTargetFileType {
             if EchoFilesFlag {
                 fmt.Printf("%v\t%v\t%v\t%v\t%v\t%v\n",
                     data.Name, 
@@ -120,7 +137,7 @@ func main() {
                     return err
                 }
                 if nBytes > 0 {
-                    fmt.Printf("Copied %v to %v\n", data.Path, ToDir)
+                    log.Printf("Copied %v to %v\n", data.Path, ToDir)
                 }
             }
         }
@@ -128,6 +145,6 @@ func main() {
     })
 
     if err != nil {
-        fmt.Printf("Error walking the directory: %v\n", err)
+        log.Printf("Error walking the directory: %v\n", err)
     }
 }
