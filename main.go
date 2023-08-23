@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,22 @@ import (
 	"sync"
 	"time"
 )
+
+type FileMetadata struct {
+    uid int64
+    Name string
+    Ext string
+    ModDate time.Time
+    IsDir bool
+    Size int64
+    Path string
+    IsReg bool
+}
+
+type CopyJob struct {
+    Source string
+    Destination string
+}
 
 func GetHomeDir() (string, error) {
     homeDir, homeDirErr := os.UserHomeDir()
@@ -47,22 +64,6 @@ func CopyFile(from string, to string) (int64, error) {
     return nBytes, err
 }
 
-type FileMetadata struct {
-    uid int64
-    Name string
-    Ext string
-    ModDate time.Time
-    IsDir bool
-    Size int64
-    Path string
-    IsReg bool
-}
-
-type CopyJob struct {
-    Source string
-    Destination string
-}
-
 func ParseFileTypes(fileTypes string, sep string) map[string]bool {
     SplitFileTypeString := strings.Split(fileTypes, sep)
     TargetFileTypes := make(map[string]bool)
@@ -95,15 +96,19 @@ func main() {
     log.Println("This log is written to crawler_log.txt")
 
     var RootDir string
-    flag.StringVar(&RootDir, "rootDir", homeDir, "The root directory to crawl")
+    flag.StringVar(&RootDir, "RootDir", homeDir, "The root directory to crawl")
     var FileTypes string
-    flag.StringVar(&FileTypes, "fileType", ".py", "The file types to find")
+    flag.StringVar(&FileTypes, "FileType", ".py", "The file types to find")
     var ToDir string
-    flag.StringVar(&ToDir, "toDir", "/tmp/", "The directory to copy files into")
+    flag.StringVar(&ToDir, "ToDir", "/tmp/", "The directory to copy files into")
     var CopyFilesFlag bool
     flag.BoolVar(&CopyFilesFlag, "CopyFilesFlag", false, "Copy files into ToDir directory")
     var EchoFilesFlag bool
     flag.BoolVar(&EchoFilesFlag, "EchoFilesFlag", true, "Print results to stdout")
+    var ToCSV bool
+    flag.BoolVar(&ToCSV, "ToCSV", false, "Output to CSV file?")
+    var NumWorkers int64
+    flag.Int64Var(&NumWorkers, "NumWorkers", 4, "Number of jobs to parallelise")
     flag.Parse()
 
     log.Printf("crawler called\n")
@@ -112,6 +117,8 @@ func main() {
     log.Printf("Output directory: %v\n", ToDir)
     log.Printf("Copy files? %v\n", CopyFilesFlag)
     log.Printf("Echo files? %v\n", EchoFilesFlag)
+    log.Printf("Output to CSV file? %v\n", ToCSV)
+    log.Printf("Number of workers: %v\n", NumWorkers)
 
     ParsedFileTypes := ParseFileTypes(FileTypes, ",")
 
@@ -121,6 +128,7 @@ func main() {
 
     CopyJobs := make([]CopyJob, 0)
     Count := 0
+    AllMetadata := make([]FileMetadata, 0)
     err := filepath.Walk(RootDir, func(path string, info os.FileInfo, err error) error {
         if err != nil {
             return err
@@ -141,6 +149,7 @@ func main() {
 
         _, IsOfTargetFileType := ParsedFileTypes[strings.ToLower(data.Ext)]
         if !data.IsDir && IsOfTargetFileType {
+            AllMetadata = append(AllMetadata, data)
             if EchoFilesFlag {
                 fmt.Printf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
                     data.uid,
@@ -160,8 +169,8 @@ func main() {
                     filepath.Join(ToDir, fmt.Sprint(data.uid) + "_" + data.Name),
                 }
                 CopyJobs = append(CopyJobs, job)
-                Count += 1
             }
+            Count += 1
         }
 
         return nil
@@ -171,7 +180,8 @@ func main() {
     jobErrors := make(chan error, len(CopyJobs))
     var wg sync.WaitGroup
 
-    for i := 0; i < 5; i++ {
+    log.Printf("Initalising %d workers\n", NumWorkers)
+    for i := 0; i < int(NumWorkers); i++ {
         go CopyFileWorker(jobs, jobErrors, &wg)
     }
 
@@ -189,6 +199,31 @@ func main() {
 
     wg.Wait()
     close(jobErrors)
+
+
+    if ToCSV {
+        csvFile, err := os.Create("./output.csv")
+        if err != nil {
+            log.Println("Could not create CSV file: ", err)
+        }
+        defer csvFile.Close()
+
+        writer := csv.NewWriter(csvFile)
+        defer writer.Flush()
+        writer.Write([]string{"UID", "Name", "Extension", "ModDate", "IsDir", "Size(B)", "FilePath", "IsRegularFile"})
+        for _, record := range AllMetadata {
+            writer.Write([]string{
+                fmt.Sprintf("%d", record.uid),
+                record.Name,
+                record.Ext,
+                fmt.Sprintf("%v", record.ModDate),
+                fmt.Sprintf("%v", record.IsDir),
+                fmt.Sprintf("%v", record.Size),
+                record.Path,
+                fmt.Sprintf("%v", record.IsReg),
+            })
+        }
+    }
 
     if err != nil {
         log.Printf("Error walking the directory: %v\n", err)
