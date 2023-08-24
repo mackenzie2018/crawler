@@ -1,31 +1,31 @@
 package main
 
 import (
-	"encoding/csv"
-	"flag"
-	"fmt"
-	"io"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
+    "encoding/csv"
+    "flag"
+    "fmt"
+    "io"
+    "log"
+    "os"
+    "path/filepath"
+    "strings"
+    "sync"
+    "time"
 )
 
 type FileMetadata struct {
-    uid int64
-    Name string
-    Ext string
+    uid     int64
+    Name    string
+    Ext     string
     ModDate time.Time
-    IsDir bool
-    Size int64
-    Path string
-    IsReg bool
+    IsDir   bool
+    Size    int64
+    Path    string
+    IsReg   bool
 }
 
 type CopyJob struct {
-    Source string
+    Source      string
     Destination string
 }
 
@@ -72,7 +72,7 @@ func ParseFileTypes(fileTypes string, sep string) map[string]bool {
     return TargetFileTypes
 }
 
-func CopyFileWorker(jobs <- chan CopyJob, errors chan <- error, wg *sync.WaitGroup) {
+func CopyFileWorker(jobs <-chan CopyJob, errors chan<- error, wg *sync.WaitGroup) {
     for job := range jobs {
         log.Println("Copying ", job.Source, " to ", job.Destination)
         _, err := CopyFile(job.Source, job.Destination)
@@ -134,17 +134,15 @@ func main() {
         }
 
         data := FileMetadata{
-            uid: int64(Count),
-            Name: info.Name(),
-            Ext: filepath.Ext(path),
+            uid:     int64(Count),
+            Name:    info.Name(),
+            Ext:     filepath.Ext(path),
             ModDate: info.ModTime(),
-            IsDir: info.IsDir(),
-            Size: info.Size(),
-            Path: path,
-            IsReg: info.Mode().IsRegular(),
+            IsDir:   info.IsDir(),
+            Size:    info.Size(),
+            Path:    path,
+            IsReg:   info.Mode().IsRegular(),
         }
-
-
 
         _, IsOfTargetFileType := ParsedFileTypes[strings.ToLower(data.Ext)]
         if !data.IsDir && IsOfTargetFileType {
@@ -152,8 +150,8 @@ func main() {
             if EchoFilesFlag {
                 fmt.Printf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
                     data.uid,
-                    data.Name, 
-                    data.Ext, 
+                    data.Name,
+                    data.Ext,
                     data.ModDate,
                     data.IsDir,
                     data.Size,
@@ -165,7 +163,7 @@ func main() {
             if CopyFilesFlag {
                 job := CopyJob{
                     data.Path,
-                    filepath.Join(ToDir, fmt.Sprint(data.uid) + "_" + data.Name),
+                    filepath.Join(ToDir, fmt.Sprint(data.uid)+"_"+data.Name),
                 }
                 CopyJobs = append(CopyJobs, job)
             }
@@ -198,7 +196,6 @@ func main() {
 
     wg.Wait()
     close(jobErrors)
-
 
     if ToCSV {
         csvFile, err := os.Create("./output.csv")
