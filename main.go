@@ -34,7 +34,6 @@ func GetHomeDir() (string, error) {
     if homeDirErr != nil {
         return "", fmt.Errorf("Failed to get user home directory: %v", homeDirErr)
     }
-
     return homeDir, nil
 }
 
